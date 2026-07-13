@@ -1,0 +1,6 @@
+# Replace YOUR-SSLIP-HOSTNAME with your instance's actual sslip.io hostname,
+# e.g. 54-12-34-56.sslip.io for the IP 54.12.34.56. Caddy handles obtaining
+# and renewing the HTTPS certificate automatically — nothing else to do here.
+YOUR-SSLIP-HOSTNAME.sslip.io {
+    reverse_proxy 127.0.0.1:8000
+}

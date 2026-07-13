@@ -1,0 +1,11 @@
+**/.git
+**/node_modules
+**/dist
+backend/.venv
+backend/__pycache__
+backend/**/__pycache__
+backend/*.db
+backend/.env
+backend/classroom_pins.txt
+.claude
+*.md

@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+  /* Bit brand palette — mascot purple + deep indigo wordmark. */
+  --color-accent: #7c5cfa;
+  --color-accent-hover: #6a46f0;
+  --color-accent-soft: #ded6fd;
+  /* Adaptive foreground/surface tokens — redefined under [data-theme="dark"] below. */
+  --color-ink: #241454;
+  --color-surface: #ffffff;
+  --color-app-bg: #faf9ff;
+  --color-border-subtle: #e7e1fb;
+  /* Fixed (non-adaptive) navy — mascot details + "secondary" buttons stay this
+     color in both themes, so the mascot never looks inverted. */
+  --color-ink-solid: #241454;
+  --color-ink-solid-hover: #170c38;
+}
+
+:root[data-theme="dark"] {
+  --color-accent-soft: #382a6b;
+  --color-ink: #f1edfe;
+  --color-surface: #1c1733;
+  --color-app-bg: #120e24;
+  --color-border-subtle: #322a55;
+}

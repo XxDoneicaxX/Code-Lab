@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+backend/.venv/
+backend/*.db
+backend/*.db-shm
+backend/*.db-wal
+backend/.env
+backend/classroom_pins.txt
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local Claude Code session config (machine-specific, not project source)
+.claude/settings.local.json
