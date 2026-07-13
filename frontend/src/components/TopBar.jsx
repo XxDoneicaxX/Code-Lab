@@ -15,7 +15,7 @@ export default function TopBar({ crumbs = [], right, backTo, showNav = true }) {
     <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border-subtle bg-surface px-4 sm:px-6">
       <Link to="/" className="flex items-center gap-2 font-bold text-ink">
         <BitMascot className="h-9 w-9" />
-        <span className="hidden sm:inline">BIT Code Lab</span>
+        <span className="hidden sm:inline">CodeLab</span>
       </Link>
 
       {showNav && (

@@ -1,5 +1,5 @@
 [Unit]
-Description=BIT Code Lab (FastAPI + built frontend)
+Description=CodeLab (FastAPI + built frontend)
 After=network.target
 
 [Service]

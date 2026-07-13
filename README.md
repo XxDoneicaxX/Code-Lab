@@ -1,4 +1,4 @@
-# BIT Code Lab
+# CodeLab
 
 A browser-based Python coding playground for a one-week summer coding camp.
 Students on school Chromebooks pick their classroom, enter a 4-digit PIN,
@@ -169,22 +169,23 @@ database at all. Caddy sits in front only to get free, automatic HTTPS
 (required for `input()`); it isn't doing anything the FastAPI app can't
 already do for routing.
 
-1. **Launch the instance**: Ubuntu 24.04 LTS, `t3.small`. Security group:
-   allow inbound **22** (SSH, restrict to your IP), **80** and **443**
-   (Caddy) — deliberately **not** 8000; uvicorn only listens on
-   `127.0.0.1` and is never reachable directly from the internet.
+1. **Launch the instance**: any current Ubuntu LTS (24.04, 26.04, whichever
+   is offered as free-tier eligible), `t3.small`. Security group: allow
+   inbound **22** (SSH, restrict to your IP), **80** and **443** (Caddy) —
+   deliberately **not** 8000; uvicorn only listens on `127.0.0.1` and is
+   never reachable directly from the internet.
 2. **(Recommended) Allocate a free Elastic IP** and associate it with the
    instance, so its public address — and therefore your sslip.io hostname,
    if using one — never changes across stops/restarts.
 3. **SSH in**, then install dependencies, clone the repo, and build:
    ```bash
-   sudo apt-get update && sudo apt-get install -y python3.12-venv nodejs npm git
+   sudo apt-get update && sudo apt-get install -y python3-venv nodejs npm git
    git clone <your-repo-url> bit-code-lab && cd bit-code-lab
 
    cd backend
-   python3.12 -m venv .venv
+   python3 -m venv .venv
    .venv/bin/pip install -r requirements.txt
-   echo "SECRET_KEY=$(python3.12 -c 'import secrets; print(secrets.token_hex(32))')" > .env
+   echo "SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(32))')" > .env
    .venv/bin/python -m app.seed --sequential-pins   # PINs saved to classroom_pins.txt
    cd ../frontend && npm ci && npm run build && cd ..
    ```
