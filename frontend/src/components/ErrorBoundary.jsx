@@ -12,7 +12,7 @@ export default class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, info) {
-    console.error("Unhandled error in CodeLab:", error, info);
+    console.error("Unhandled error in Tech Titans Lab:", error, info);
   }
 
   render() {

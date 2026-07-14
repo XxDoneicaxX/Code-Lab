@@ -33,7 +33,7 @@ export default function LandingPage() {
         <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center px-6 py-16 text-center">
           <BitMascot className="h-16 w-16" />
           <h1 className="mt-6 text-4xl font-extrabold text-ink sm:text-5xl">
-            Welcome to <span className="text-accent">CodeLab</span>
+            Welcome to <span className="text-accent">Tech Titans Lab</span>
           </h1>
           <p className="mt-3 text-ink/60">Practice Python, or continue your classroom project.</p>
 

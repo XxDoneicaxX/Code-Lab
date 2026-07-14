@@ -1,5 +1,5 @@
 [Unit]
-Description=CodeLab (FastAPI + built frontend)
+Description=Tech Titans Lab (FastAPI + built frontend)
 After=network.target
 
 [Service]

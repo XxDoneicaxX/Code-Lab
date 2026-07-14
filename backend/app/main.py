@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
                 # CLI manually, so print PINs here — they land in CloudWatch
                 # (or whatever collects stdout) instead of a local file.
                 print("=" * 60)
-                print("CodeLab: seeded classrooms on first boot. Classroom PINs:")
+                print("Tech Titans Lab: seeded classrooms on first boot. Classroom PINs:")
                 print("\n".join(lines))
                 print("Save these now — they won't be printed again unless the DB is reset.")
                 print("=" * 60)
@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="CodeLab API", lifespan=lifespan)
+app = FastAPI(title="Tech Titans Lab API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

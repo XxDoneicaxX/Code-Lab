@@ -1,4 +1,4 @@
-# CodeLab
+# Tech Titans Lab
 
 A browser-based Python coding playground for a one-week summer coding camp.
 Students on school Chromebooks pick their classroom, enter a 4-digit PIN,
