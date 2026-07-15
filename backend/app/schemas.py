@@ -92,3 +92,7 @@ class FileCreateIn(BaseModel):
 
 class FileRenameIn(BaseModel):
     name: str = Field(min_length=1, max_length=255)
+
+
+class FileMoveIn(BaseModel):
+    parent_id: int | None = None

@@ -1,10 +1,12 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import Button from "./Button";
 import ConfirmDialog from "./ConfirmDialog";
 import Dialog from "./Dialog";
 
 const ASSET_ACCEPT = ".png,.jpg,.jpeg,.webp,.wav,.mp3";
+const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const AUDIO_TYPES = new Set(["audio/wav", "audio/mpeg"]);
 
 const ICONS = {
   ".py": "🐍",
@@ -26,6 +28,139 @@ function resolveTargetFolderId(selectedId, byId, rootId) {
   const node = selectedId == null ? null : byId.get(selectedId);
   if (!node) return rootId;
   return node.is_directory ? node.id : (node.parent_id ?? rootId);
+}
+
+/** Every directory in the project, labeled with its full path from root, for
+ * the Move dialog's destination picker. */
+function folderOptions(files, byId, rootId) {
+  const pathFor = (id) => {
+    const parts = [];
+    let node = byId.get(id);
+    while (node && node.id !== rootId) {
+      parts.unshift(node.name);
+      node = node.parent_id == null ? undefined : byId.get(node.parent_id);
+    }
+    return parts.length ? parts.join("/") : "(Project root)";
+  };
+  const dirs = files
+    .filter((f) => f.is_directory)
+    .map((f) => ({ id: f.id, label: pathFor(f.id) }));
+  dirs.sort((a, b) => a.label.localeCompare(b.label));
+  return [{ id: rootId, label: "(Project root)" }, ...dirs];
+}
+
+function triggerBrowserDownload(bytes, filename, contentType) {
+  const blob = new Blob([bytes], { type: contentType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Fetches an asset's bytes once and shows it inline — an <img> for images,
+ * an <audio> player for sound — plus a Download button. Loads lazily (only
+ * once this dialog is open) since most assets in a project are never
+ * previewed in a given session. */
+function AssetPreviewDialog({ node, onFetchBytes, onClose }) {
+  const [state, setState] = useState({ status: "loading" }); // | {status:"ready", url, bytes} | {status:"error", message}
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl = null;
+    onFetchBytes(node.id)
+      .then((bytes) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(new Blob([bytes], { type: node.content_type }));
+        setState({ status: "ready", url: objectUrl, bytes });
+      })
+      .catch((err) => {
+        if (!cancelled) setState({ status: "error", message: err.message });
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [node, onFetchBytes]);
+
+  return (
+    <Dialog title={node.name} onClose={onClose}>
+      <div className="mt-4 flex flex-col items-center gap-3">
+        {state.status === "loading" && <p className="text-sm text-ink/60">Loading…</p>}
+        {state.status === "error" && (
+          <p className="text-sm font-medium text-red-600">{state.message}</p>
+        )}
+        {state.status === "ready" && IMAGE_TYPES.has(node.content_type) && (
+          <img
+            src={state.url}
+            alt={node.name}
+            className="max-h-80 max-w-full rounded-lg border border-border-subtle object-contain"
+          />
+        )}
+        {state.status === "ready" && AUDIO_TYPES.has(node.content_type) && (
+          <audio controls src={state.url} className="w-full" />
+        )}
+        <div className="mt-1 flex w-full justify-end gap-2">
+          <Button variant="neutral" onClick={onClose}>
+            Close
+          </Button>
+          <Button
+            variant="primary"
+            disabled={state.status !== "ready"}
+            onClick={() =>
+              state.status === "ready" &&
+              triggerBrowserDownload(state.bytes, node.name, node.content_type)
+            }
+          >
+            Download
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
+/** Destination-folder picker for Move. */
+function MoveDialog({ node, options, initialParentId, busy, error, onSubmit, onClose }) {
+  const [parentId, setParentId] = useState(initialParentId);
+  return (
+    <Dialog title={`Move "${node.name}"`} onClose={onClose}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!busy) onSubmit(parentId);
+        }}
+        className="mt-4 flex flex-col gap-3"
+      >
+        <label className="text-sm font-medium text-ink/70">
+          Destination folder
+          <select
+            autoFocus
+            value={parentId}
+            onChange={(event) => setParentId(Number(event.target.value))}
+            disabled={busy}
+            className="mt-1 w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-ink outline-none focus:border-accent focus:ring-4 focus:ring-accent/30"
+          >
+            {options.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {error && <p className="text-sm font-medium text-red-600">{error}</p>}
+        <div className="mt-1 flex justify-end gap-2">
+          <Button type="button" variant="neutral" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy}>
+            {busy ? "Moving…" : "Move"}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  );
 }
 
 /** Inline single-text-field dialog for New File / New Folder / Rename. */
@@ -79,12 +214,17 @@ export default function FileExplorer({
   onRename,
   onDelete,
   onUploadAsset,
+  onMove,
+  onFetchAssetBytes,
 }) {
   const [collapsedIds, setCollapsedIds] = useState(() => new Set());
   const [selectedId, setSelectedId] = useState(null);
   const [creating, setCreating] = useState(null); // { parentId, isDirectory } | null
   const [renaming, setRenaming] = useState(null); // file | null
   const [deleting, setDeleting] = useState(null); // file | null
+  const [moving, setMoving] = useState(null); // file | null
+  const [previewing, setPreviewing] = useState(null); // file | null
+  const [downloading, setDownloading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState(null);
   const fileInputRef = useRef(null);
@@ -120,7 +260,8 @@ export default function FileExplorer({
   const handleSelect = (node) => {
     setSelectedId(node.id);
     if (node.is_directory) toggleFolder(node.id);
-    else if (!node.content_type) onSelectFile(node); // assets aren't editable text
+    else if (node.content_type) setPreviewing(node); // assets aren't editable text — preview instead
+    else onSelectFile(node);
   };
 
   const runAction = async (action) => {
@@ -152,6 +293,23 @@ export default function FileExplorer({
     if (ok) {
       if (selectedId === deleting.id) setSelectedId(null);
       setDeleting(null);
+    }
+  };
+
+  const handleMove = async (parentId) => {
+    const ok = await runAction(() => onMove(moving, parentId));
+    if (ok) setMoving(null);
+  };
+
+  const handleDownload = async (node) => {
+    setDownloading(true);
+    try {
+      const bytes = await onFetchAssetBytes(node.id);
+      triggerBrowserDownload(bytes, node.name, node.content_type);
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -230,6 +388,24 @@ export default function FileExplorer({
           Rename
         </Button>
         <Button
+          variant="neutral"
+          className="!px-2 !py-1 text-xs"
+          disabled={!selectedNode}
+          onClick={() => selectedNode && setMoving(selectedNode)}
+        >
+          Move
+        </Button>
+        {selectedNode?.content_type && (
+          <Button
+            variant="neutral"
+            className="!px-2 !py-1 text-xs"
+            disabled={downloading}
+            onClick={() => handleDownload(selectedNode)}
+          >
+            {downloading ? "Downloading…" : "Download"}
+          </Button>
+        )}
+        <Button
           variant="danger-outline"
           className="!px-2 !py-1 text-xs"
           disabled={!selectedNode}
@@ -282,6 +458,27 @@ export default function FileExplorer({
           busy={busy}
           onConfirm={handleDelete}
           onClose={() => setDeleting(null)}
+        />
+      )}
+      {moving && (
+        <MoveDialog
+          node={moving}
+          options={folderOptions(files, byId, rootId).filter((opt) => opt.id !== moving.id)}
+          initialParentId={moving.parent_id ?? rootId}
+          busy={busy}
+          error={formError}
+          onSubmit={handleMove}
+          onClose={() => {
+            setMoving(null);
+            setFormError(null);
+          }}
+        />
+      )}
+      {previewing && (
+        <AssetPreviewDialog
+          node={previewing}
+          onFetchBytes={onFetchAssetBytes}
+          onClose={() => setPreviewing(null)}
         />
       )}
     </div>

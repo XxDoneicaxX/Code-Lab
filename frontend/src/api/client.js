@@ -92,6 +92,13 @@ export const renameFile = (classroomId, groupId, fileId, name) =>
 export const deleteFile = (classroomId, groupId, fileId) =>
   request(`/api/groups/${groupId}/files/${fileId}`, { method: "DELETE", classroomId });
 
+export const moveFile = (classroomId, groupId, fileId, parentId) =>
+  request(`/api/groups/${groupId}/files/${fileId}/move`, {
+    method: "PATCH",
+    body: { parent_id: parentId },
+    classroomId,
+  });
+
 export async function uploadAsset(classroomId, groupId, parentId, file) {
   const form = new FormData();
   if (parentId != null) form.append("parent_id", String(parentId));

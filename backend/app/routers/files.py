@@ -9,6 +9,7 @@ from ..deps import get_classroom_id
 from ..schemas import (
     FileContentOut,
     FileCreateIn,
+    FileMoveIn,
     FileNodeOut,
     FileRenameIn,
     FileSaveIn,
@@ -128,6 +129,29 @@ def rename_file(
         db.rollback()
         raise HTTPException(status_code=409, detail=_DUPLICATE_NAME_DETAIL)
     return node
+
+
+@router.patch("/{group_id}/files/{file_id}/move", response_model=FileNodeOut)
+def move_file(
+    group_id: int,
+    file_id: int,
+    payload: FileMoveIn,
+    classroom_id: int = Depends(get_classroom_id),
+    db: Session = Depends(get_db),
+):
+    project = _authorized_project(db, group_id, classroom_id)
+    node = _authorized_node(db, group_id, file_id, classroom_id)
+    try:
+        return file_service.move_node(db, project, node, payload.parent_id)
+    except file_service.FileNotFoundInProjectError:
+        raise HTTPException(status_code=404, detail="Destination folder not found.")
+    except file_service.NotADirectoryError_ as err:
+        raise HTTPException(status_code=400, detail=str(err))
+    except file_service.InvalidMoveError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=_DUPLICATE_NAME_DETAIL)
 
 
 @router.delete("/{group_id}/files/{file_id}", status_code=204)

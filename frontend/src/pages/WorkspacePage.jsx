@@ -9,6 +9,7 @@ import {
   getFileContent,
   getToken,
   listFiles,
+  moveFile,
   renameFile,
   saveFileContent,
   uploadAsset,
@@ -124,6 +125,13 @@ export default function WorkspacePage() {
     await loadTree(activeFileId);
   };
 
+  const handleMove = async (file, parentId) => {
+    await moveFile(classroomId, groupId, file.id, parentId);
+    await loadTree(activeFileId);
+  };
+
+  const handleFetchAssetBytes = (fileId) => getAssetBytes(classroomId, groupId, fileId);
+
   // Materializes every other file/asset in the project into Pyodide's
   // filesystem before Run, so `import helper` or
   // `pygame.image.load("assets/sprite.png")` work. Each node's path is
@@ -214,6 +222,8 @@ export default function WorkspacePage() {
               onRename={handleRename}
               onDelete={handleDelete}
               onUploadAsset={handleUploadAsset}
+              onMove={handleMove}
+              onFetchAssetBytes={handleFetchAssetBytes}
             />
           )
         }

@@ -36,6 +36,10 @@ class NotAFileError(Exception):
     pass
 
 
+class InvalidMoveError(Exception):
+    pass
+
+
 class UnsupportedAssetTypeError(Exception):
     pass
 
@@ -147,6 +151,27 @@ def create_node(
 
 def rename_node(db: Session, node: models.ProjectFile, name: str) -> models.ProjectFile:
     node.name = validate_name(name)
+    db.commit()
+    db.refresh(node)
+    return node
+
+
+def move_node(
+    db: Session, project: models.Project, node: models.ProjectFile, new_parent_id: int | None
+) -> models.ProjectFile:
+    if node.parent_id is None:
+        raise InvalidMoveError("The project root can't be moved.")
+    target = _get_parent_dir(db, project, new_parent_id)
+
+    if target.id == node.id:
+        raise InvalidMoveError("Can't move a folder into itself.")
+    ancestor = target
+    while ancestor.parent_id is not None:
+        ancestor = get_node(db, ancestor.parent_id, project.id)
+        if ancestor.id == node.id:
+            raise InvalidMoveError("Can't move a folder into one of its own subfolders.")
+
+    node.parent_id = target.id
     db.commit()
     db.refresh(node)
     return node
