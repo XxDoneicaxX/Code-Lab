@@ -48,6 +48,7 @@ function blockingInput(prompt) {
 }
 
 const BOOTSTRAP = `
+import ast
 import builtins
 
 def _input(prompt=""):
@@ -59,6 +60,22 @@ def _input(prompt=""):
         )
 
 builtins.input = _input
+
+def _detect_pygame_import(source):
+    """AST-based: only real import statements count, never mentions of
+    "pygame" inside comments, strings, or variable names."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            if any(alias.name.split(".")[0] == "pygame" for alias in node.names):
+                return True
+        elif isinstance(node, ast.ImportFrom):
+            if node.module and node.module.split(".")[0] == "pygame":
+                return True
+    return False
 `;
 
 let pyodide = null;
@@ -86,8 +103,48 @@ function friendlyTraceback(message) {
   return ["Traceback (most recent call last):", ...lines.slice(start)].join("\n");
 }
 
+// Writes a multi-file project's other files (siblings a program might
+// `import`) and uploaded assets into Pyodide's virtual filesystem, so
+// `import helper` or `open("assets/sprite.png")` work the same way they
+// would if this were a real folder of files.
+function materializeManifest(manifest) {
+  if (!manifest) return;
+  // pyodide.FS.mkdirTree is unreliable in this Pyodide build (creates a
+  // directory that then fails ENOENT on any read/write) — create each path
+  // segment individually with plain mkdir instead, which works correctly.
+  const ensureDirFor = (path) => {
+    const slash = path.lastIndexOf("/");
+    if (slash === -1) return;
+    let current = "";
+    for (const part of path.slice(0, slash).split("/")) {
+      current = current ? `${current}/${part}` : part;
+      try {
+        pyodide.FS.mkdir(current);
+      } catch (err) {
+        if (err?.errno !== pyodide.ERRNO_CODES.EEXIST) throw err;
+      }
+    }
+  };
+  for (const f of manifest.files ?? []) {
+    ensureDirFor(f.path);
+    pyodide.FS.writeFile(f.path, f.content);
+  }
+  for (const a of manifest.assets ?? []) {
+    ensureDirFor(a.path);
+    pyodide.FS.writeFile(a.path, new Uint8Array(a.bytes));
+  }
+}
+
 self.onmessage = async (event) => {
-  const { type, code } = event.data;
+  const { type, code, requestId, manifest } = event.data;
+
+  if (type === "detect_pygame") {
+    await ready;
+    const result = pyodide ? pyodide.globals.get("_detect_pygame_import")(code) : false;
+    postMessage({ type: "pygame_detected", requestId, result });
+    return;
+  }
+
   if (type !== "run") return;
   await ready;
   if (!pyodide) return;
@@ -95,6 +152,7 @@ self.onmessage = async (event) => {
   // A fresh namespace per run, so deleted code stops "working" after deletion.
   let namespace = null;
   try {
+    materializeManifest(manifest);
     namespace = pyodide.globals.get("dict")();
     await pyodide.runPythonAsync(code, { globals: namespace });
     postMessage({ type: "done" });

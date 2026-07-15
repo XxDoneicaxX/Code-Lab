@@ -56,10 +56,12 @@ export default function ClassroomsPage() {
       />
       <PixelAccents variant="page" />
       <div className="relative z-10">
-        <TopBar crumbs={["Classroom Projects"]} backTo={{ label: "Home", to: "/" }} />
+        <TopBar crumbs={["Classroom Work"]} backTo={{ label: "Home", to: "/" }} />
         <main className="mx-auto max-w-4xl px-6 py-10">
-          <h1 className="text-2xl font-bold text-ink">Classroom Projects</h1>
-          <p className="mt-1 text-ink/60">Pick your classroom to continue your capstone project.</p>
+          <h1 className="text-2xl font-bold text-ink">Classroom Work</h1>
+          <p className="mt-1 text-ink/60">
+            Pick your classroom to continue your in-class work or capstone project.
+          </p>
           <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
             {classrooms.map((classroom, index) => (
               <TileButton

@@ -17,13 +17,39 @@ import PixelAccents from "../components/PixelAccents";
 import TopBar from "../components/TopBar";
 import { formatLastSaved } from "../utils/formatDate";
 
+const SECTIONS = [
+  {
+    kind: "in_class",
+    heading: "In-Class Work",
+    subheading: "Your personal practice files from class.",
+    createLabel: "+ New Practice File",
+    emptyTitle: "No practice files yet.",
+    emptyDetail: 'Click "+ New Practice File" to start one.',
+    createTitle: "New Practice File",
+    deleteMessage: "This practice file will be permanently deleted.",
+    openLabel: "Open",
+  },
+  {
+    kind: "capstone",
+    heading: "Capstone Groups",
+    subheading: "Teacher-managed team projects for the week.",
+    createLabel: "+ Create Group",
+    emptyTitle: "No capstone groups have been created yet.",
+    emptyDetail: "Create a group to begin.",
+    createTitle: "Create Group",
+    deleteMessage: "This will also delete the group's saved capstone project.",
+    openLabel: "Open Codespace",
+  },
+];
+
 export default function GroupsPage() {
   const { classroomId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const [data, setData] = useState(null);
+  const [classroom, setClassroom] = useState(null);
+  const [groupsByKind, setGroupsByKind] = useState(null);
   const [error, setError] = useState(null);
-  const [creating, setCreating] = useState(false);
+  const [creatingKind, setCreatingKind] = useState(null);
   const [renamingGroup, setRenamingGroup] = useState(null);
   const [deletingGroup, setDeletingGroup] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -42,8 +68,11 @@ export default function GroupsPage() {
       redirectToPin();
       return;
     }
-    listGroups(classroomId)
-      .then(setData)
+    Promise.all(SECTIONS.map((section) => listGroups(classroomId, section.kind)))
+      .then(([inClass, capstone]) => {
+        setClassroom(inClass.classroom);
+        setGroupsByKind({ in_class: inClass.groups, capstone: capstone.groups });
+      })
       .catch((err) => {
         if (err.status === 401 || err.status === 403) redirectToPin();
         else setError(err.message);
@@ -54,9 +83,12 @@ export default function GroupsPage() {
     setBusy(true);
     setFormError(null);
     try {
-      const group = await createGroup(classroomId, name);
-      setData((prev) => ({ ...prev, groups: [...prev.groups, group] }));
-      setCreating(false);
+      const group = await createGroup(classroomId, name, creatingKind);
+      setGroupsByKind((prev) => ({
+        ...prev,
+        [creatingKind]: [...prev[creatingKind], group],
+      }));
+      setCreatingKind(null);
     } catch (err) {
       if (err.status === 401 || err.status === 403) return redirectToPin();
       setFormError(err.message);
@@ -70,9 +102,9 @@ export default function GroupsPage() {
     setFormError(null);
     try {
       const updated = await renameGroup(classroomId, renamingGroup.id, name);
-      setData((prev) => ({
+      setGroupsByKind((prev) => ({
         ...prev,
-        groups: prev.groups.map((g) => (g.id === updated.id ? updated : g)),
+        [updated.kind]: prev[updated.kind].map((g) => (g.id === updated.id ? updated : g)),
       }));
       setRenamingGroup(null);
     } catch (err) {
@@ -87,9 +119,9 @@ export default function GroupsPage() {
     setBusy(true);
     try {
       await deleteGroup(classroomId, deletingGroup.id);
-      setData((prev) => ({
+      setGroupsByKind((prev) => ({
         ...prev,
-        groups: prev.groups.filter((g) => g.id !== deletingGroup.id),
+        [deletingGroup.kind]: prev[deletingGroup.kind].filter((g) => g.id !== deletingGroup.id),
       }));
       setDeletingGroup(null);
     } catch (err) {
@@ -114,7 +146,7 @@ export default function GroupsPage() {
       />
     );
   }
-  if (!data) return <CenteredMessage title="Loading classroom…" />;
+  if (!groupsByKind) return <CenteredMessage title="Loading classroom…" />;
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-app-bg">
@@ -129,68 +161,77 @@ export default function GroupsPage() {
       <PixelAccents variant="page" />
       <div className="relative z-10">
         <TopBar
-          crumbs={[data.classroom.name]}
+          crumbs={[classroom.name]}
           backTo={{ label: "All Classrooms", to: "/classrooms" }}
         />
         <main className="mx-auto max-w-3xl px-6 py-10">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-ink">{data.classroom.name}</h1>
-              <p className="mt-1 text-ink/60">Capstone Groups</p>
-            </div>
-            <Button variant="primary" onClick={() => setCreating(true)}>
-              + Create Group
-            </Button>
-          </div>
+          <h1 className="text-2xl font-bold text-ink">{classroom.name}</h1>
 
-          {data.groups.length === 0 ? (
-            <div className="mt-10 rounded-2xl border-2 border-dashed border-white/50 bg-surface/30 p-10 text-center backdrop-blur-xl">
-              <p className="font-medium text-ink">No capstone groups have been created yet.</p>
-              <p className="mt-1 text-sm text-ink/60">Create a group to begin.</p>
-            </div>
-          ) : (
-            <ul className="mt-8 flex flex-col gap-3">
-              {data.groups.map((group) => (
-                <li
-                  key={group.id}
-                  className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/50 bg-surface/40 p-5 shadow-xl shadow-black/10 backdrop-blur-xl transition-all hover:border-accent hover:bg-surface/60 hover:shadow-2xl"
-                >
+          {SECTIONS.map((section) => {
+            const groups = groupsByKind[section.kind];
+            return (
+              <section key={section.kind} className="mt-10">
+                <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
-                    <p className="font-semibold text-ink">{group.name}</p>
-                    <p className="mt-1 text-sm text-ink/60">
-                      Last saved: {formatLastSaved(group.last_saved)}
-                    </p>
+                    <h2 className="text-lg font-semibold text-ink">{section.heading}</h2>
+                    <p className="mt-1 text-sm text-ink/60">{section.subheading}</p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="primary"
-                      onClick={() => navigate(`/classrooms/${classroomId}/groups/${group.id}`)}
-                    >
-                      Open Codespace
-                    </Button>
-                    <Button variant="neutral" onClick={() => setRenamingGroup(group)}>
-                      Rename
-                    </Button>
-                    <Button variant="danger-outline" onClick={() => setDeletingGroup(group)}>
-                      Delete
-                    </Button>
+                  <Button variant="primary" onClick={() => setCreatingKind(section.kind)}>
+                    {section.createLabel}
+                  </Button>
+                </div>
+
+                {groups.length === 0 ? (
+                  <div className="mt-4 rounded-2xl border-2 border-dashed border-white/50 bg-surface/30 p-10 text-center backdrop-blur-xl">
+                    <p className="font-medium text-ink">{section.emptyTitle}</p>
+                    <p className="mt-1 text-sm text-ink/60">{section.emptyDetail}</p>
                   </div>
-                </li>
-              ))}
-            </ul>
-          )}
+                ) : (
+                  <ul className="mt-4 flex flex-col gap-3">
+                    {groups.map((group) => (
+                      <li
+                        key={group.id}
+                        className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/50 bg-surface/40 p-5 shadow-xl shadow-black/10 backdrop-blur-xl transition-all hover:border-accent hover:bg-surface/60 hover:shadow-2xl"
+                      >
+                        <div>
+                          <p className="font-semibold text-ink">{group.name}</p>
+                          <p className="mt-1 text-sm text-ink/60">
+                            Last saved: {formatLastSaved(group.last_saved)}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="primary"
+                            onClick={() => navigate(`/classrooms/${classroomId}/groups/${group.id}`)}
+                          >
+                            {section.openLabel}
+                          </Button>
+                          <Button variant="neutral" onClick={() => setRenamingGroup(group)}>
+                            Rename
+                          </Button>
+                          <Button variant="danger-outline" onClick={() => setDeletingGroup(group)}>
+                            Delete
+                          </Button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            );
+          })}
         </main>
       </div>
 
-      {creating && (
+      {creatingKind && (
         <GroupNameDialog
-          title="Create Group"
-          submitLabel="Create Group"
+          title={SECTIONS.find((s) => s.kind === creatingKind).createTitle}
+          submitLabel="Create"
           busy={busy}
           error={formError}
           onSubmit={handleCreate}
           onClose={() => {
-            setCreating(false);
+            setCreatingKind(null);
             setFormError(null);
           }}
         />
@@ -198,7 +239,7 @@ export default function GroupsPage() {
 
       {renamingGroup && (
         <GroupNameDialog
-          title="Rename Group"
+          title="Rename"
           submitLabel="Save Name"
           initialValue={renamingGroup.name}
           busy={busy}
@@ -214,8 +255,8 @@ export default function GroupsPage() {
       {deletingGroup && (
         <ConfirmDialog
           title={`Delete "${deletingGroup.name}"?`}
-          message="This will also delete the group's saved capstone project."
-          confirmLabel="Delete Group"
+          message={SECTIONS.find((s) => s.kind === deletingGroup.kind).deleteMessage}
+          confirmLabel="Delete"
           busy={busy}
           onConfirm={handleDelete}
           onClose={() => setDeletingGroup(null)}

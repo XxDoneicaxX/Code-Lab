@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const WORKER_URL = "/pyodide-worker.js";
 const MAX_OUTPUT_LINES = 2000;
 const FLUSH_INTERVAL_MS = 50;
-const RUN_DIVIDER = "─".repeat(36);
 
 const SIGNAL_INDEX = 0;
 const LENGTH_INDEX = 1;
@@ -36,6 +35,8 @@ export function usePythonRunner() {
   const hasOutputRef = useRef(false);
   const inputBufferRef = useRef(null); // { signalView, dataView } | null
   const pendingInputRef = useRef(null);
+  const pendingDetectionsRef = useRef(new Map()); // requestId -> resolve, for detectPygame()
+  const detectionIdRef = useRef(0);
   const [status, setStatus] = useState("loading");
   const [output, setOutput] = useState([]);
   const [pendingInput, setPendingInputState] = useState(null);
@@ -113,6 +114,14 @@ export function usePythonRunner() {
           );
           setStatusBoth("failed");
           break;
+        case "pygame_detected": {
+          const resolve = pendingDetectionsRef.current.get(msg.requestId);
+          if (resolve) {
+            pendingDetectionsRef.current.delete(msg.requestId);
+            resolve(msg.result);
+          }
+          break;
+        }
         default:
           break;
       }
@@ -128,14 +137,27 @@ export function usePythonRunner() {
     };
   }, [startWorker]);
 
+  // Asks the worker's already-loaded Python interpreter whether `code`
+  // contains a real `import pygame` (AST-based — see pyodide-worker.js).
+  const detectPygame = useCallback((code) => {
+    return new Promise((resolve) => {
+      if (statusRef.current !== "ready" || !workerRef.current) {
+        resolve(false);
+        return;
+      }
+      const requestId = ++detectionIdRef.current;
+      pendingDetectionsRef.current.set(requestId, resolve);
+      workerRef.current.postMessage({ type: "detect_pygame", code, requestId });
+    });
+  }, []);
+
   const run = useCallback(
-    (code) => {
+    (code, manifest) => {
       if (statusRef.current !== "ready" || !workerRef.current) return;
-      if (hasOutputRef.current) enqueue("system", RUN_DIVIDER);
       setStatusBoth("running");
-      workerRef.current.postMessage({ type: "run", code });
+      workerRef.current.postMessage({ type: "run", code, manifest });
     },
-    [enqueue, setStatusBoth]
+    [setStatusBoth]
   );
 
   const stop = useCallback(() => {
@@ -167,5 +189,15 @@ export function usePythonRunner() {
     setOutput([]);
   }, []);
 
-  return { status, output, pendingInput, run, stop, clear, submitInput };
+  return {
+    status,
+    output,
+    pendingInput,
+    run,
+    stop,
+    clear,
+    submitInput,
+    detectPygame,
+    pushOutput: enqueue, // lets other execution modes (pygame) share this same Output feed
+  };
 }

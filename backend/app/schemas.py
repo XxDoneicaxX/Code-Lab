@@ -15,6 +15,7 @@ class GroupOut(BaseModel):
 
     id: int
     name: str
+    kind: str
     last_saved: datetime | None = None
 
 
@@ -36,7 +37,7 @@ class _GroupNameIn(BaseModel):
 
 
 class GroupCreateIn(_GroupNameIn):
-    pass
+    kind: str = Field(default="capstone", pattern=r"^(capstone|in_class)$")
 
 
 class GroupRenameIn(_GroupNameIn):
@@ -49,28 +50,45 @@ class PinVerifyIn(BaseModel):
 
 class PinVerifyOut(BaseModel):
     token: str
-    classroom: ClassroomOut
 
 
-class ProjectOut(BaseModel):
+class FileNodeOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    group_id: int
-    code: str
-    created_at: datetime
-    updated_at: datetime
+    parent_id: int | None
+    name: str
+    is_directory: bool
+    content_type: str | None = None
+    size_bytes: int | None = None
 
 
-class WorkspaceOut(BaseModel):
+class FileTreeOut(BaseModel):
     classroom: ClassroomOut
     group: GroupOut
-    project: ProjectOut
+    root_id: int
+    files: list[FileNodeOut]
 
 
-class ProjectSaveIn(BaseModel):
-    code: str = Field(max_length=200_000)
+class FileContentOut(BaseModel):
+    id: int
+    name: str
+    content: str
 
 
-class ProjectSaveOut(BaseModel):
+class FileSaveIn(BaseModel):
+    content: str = Field(max_length=200_000)
+
+
+class FileSaveOut(BaseModel):
     updated_at: datetime
+
+
+class FileCreateIn(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    is_directory: bool = False
+    parent_id: int | None = None
+
+
+class FileRenameIn(BaseModel):
+    name: str = Field(min_length=1, max_length=255)

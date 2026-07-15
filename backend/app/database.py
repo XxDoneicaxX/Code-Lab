@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from .config import settings
@@ -38,3 +38,22 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def run_migrations():
+    """Hand-rolled migrations for columns added after the initial deploy.
+
+    `Base.metadata.create_all` only creates missing tables — it never alters
+    an existing one — so a column added to a model after go-live needs an
+    explicit ALTER TABLE here. No Alembic in this project; this is the
+    lightweight equivalent for a single-table, single-tenant SQLite app.
+    """
+    inspector = inspect(engine)
+    if "groups" not in inspector.get_table_names():
+        return  # fresh database — create_all will create it with all columns
+    columns = {col["name"] for col in inspector.get_columns("groups")}
+    if "kind" not in columns:
+        with engine.begin() as conn:
+            conn.execute(
+                text("ALTER TABLE groups ADD COLUMN kind VARCHAR(20) NOT NULL DEFAULT 'capstone'")
+            )

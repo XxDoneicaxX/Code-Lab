@@ -1,4 +1,4 @@
-export default function TileButton({ badge, title, subtitle, onClick }) {
+export default function TileButton({ badge, title, onClick }) {
   return (
     <button
       onClick={onClick}
@@ -8,7 +8,6 @@ export default function TileButton({ badge, title, subtitle, onClick }) {
         {badge}
       </span>
       <span className="font-semibold text-ink">{title}</span>
-      {subtitle && <span className="text-sm text-ink/60">{subtitle}</span>}
     </button>
   );
 }

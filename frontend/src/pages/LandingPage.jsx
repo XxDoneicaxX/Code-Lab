@@ -15,9 +15,9 @@ const OPTIONS = [
   },
   {
     icon: "🏫",
-    title: "Classroom Projects",
-    description: "Continue your classroom capstone projects. Projects are saved online.",
-    action: "Open Classroom Projects",
+    title: "Classroom Work",
+    description: "Continue your classroom's in-class work and capstone projects, saved online.",
+    action: "Open Classroom Work",
     to: "/classrooms",
   },
 ];
@@ -35,7 +35,7 @@ export default function LandingPage() {
           <h1 className="mt-6 text-4xl font-extrabold text-ink sm:text-5xl">
             Welcome to <span className="text-accent">Tech Titans Lab</span>
           </h1>
-          <p className="mt-3 text-ink/60">Practice Python, or continue your classroom project.</p>
+          <p className="mt-3 text-ink/60">Practice Python, or continue your classroom work.</p>
 
           <div className="mt-12 grid w-full gap-5 sm:grid-cols-2">
             {OPTIONS.map((option) => (

@@ -5,7 +5,7 @@ import ThemeToggle from "./ThemeToggle";
 
 const NAV_LINKS = [
   { to: "/workspace", label: "Workspace" },
-  { to: "/classrooms", label: "Projects" },
+  { to: "/classrooms", label: "Classroom Work" },
 ];
 
 export default function TopBar({ crumbs = [], right, backTo, showNav = true }) {

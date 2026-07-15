@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from .. import models
 
-DEFAULT_CODE = "# Start your Python capstone project here\n"
+DEFAULT_CODE = "# Start coding here\n"
 
 
 def get_group(db: Session, group_id: int) -> models.Group | None:
@@ -27,12 +27,5 @@ def get_or_create_project(db: Session, group: models.Group) -> models.Project:
             db.query(models.Project).filter(models.Project.group_id == group.id).one()
         )
         return existing
-    db.refresh(project)
-    return project
-
-
-def save_code(db: Session, project: models.Project, code: str) -> models.Project:
-    project.code = code
-    db.commit()
     db.refresh(project)
     return project

@@ -25,9 +25,9 @@ from sqlalchemy.orm import Session
 
 from .config import BACKEND_DIR
 from .database import Base, SessionLocal, engine
-from .models import Classroom, Group, Project
+from .models import Classroom, Group
 from .security import hash_pin
-from .services.project_service import DEFAULT_CODE
+from .services.project_service import get_or_create_project
 
 CLASSROOM_COUNT = 10
 PINS_FILE = BACKEND_DIR / "classroom_pins.txt"
@@ -75,11 +75,32 @@ def seed_classrooms(
     if dev_groups > 0:
         first_classroom = classrooms[0]
         for n in range(1, dev_groups + 1):
-            group = Group(classroom_id=first_classroom.id, name=f"Dev Group {n}")
+            group = Group(classroom_id=first_classroom.id, name=f"Dev Group {n}", kind="capstone")
             db.add(group)
             db.flush()
-            db.add(Project(group_id=group.id, code=DEFAULT_CODE))
+            get_or_create_project(db, group)
 
+    db.commit()
+    return lines
+
+
+def regenerate_pins(db: Session) -> list[str]:
+    """Assign a fresh random unique PIN to every existing classroom.
+
+    Leaves classrooms, groups, and projects untouched — only pin_hash changes.
+    Use this to recover from a guessable/leaked PIN scheme without losing
+    saved capstone work.
+    """
+    classrooms = db.query(Classroom).order_by(Classroom.id).all()
+    used_pins: set[str] = set()
+    lines = []
+    for classroom in classrooms:
+        pin = generate_pin()
+        while pin in used_pins:
+            pin = generate_pin()
+        used_pins.add(pin)
+        classroom.pin_hash = hash_pin(pin)
+        lines.append(f"{classroom.name}: {pin}")
     db.commit()
     return lines
 
@@ -110,8 +131,15 @@ def main() -> None:
         "--sequential-pins",
         action="store_true",
         help="Classroom N gets PIN N repeated 4 times (1111, 2222, ... 9999, 0000 for "
-        "Classroom 10). Easy to remember, at the cost of classroom isolation and being "
-        "easy to guess — fine for a low-stakes summer camp.",
+        "Classroom 10). NOT RECOMMENDED — a student who knows the formula can derive "
+        "every other classroom's PIN. Only for local dev convenience.",
+    )
+    parser.add_argument(
+        "--regenerate-pins",
+        action="store_true",
+        help="Assign a fresh random unique PIN to every existing classroom, without "
+        "touching groups or saved projects. Use this to recover from a leaked/guessable "
+        "PIN scheme.",
     )
     args = parser.parse_args()
 
@@ -119,6 +147,8 @@ def main() -> None:
         parser.error("--pin and --sequential-pins can't be used together.")
     if args.pin is not None and (len(args.pin) != 4 or not args.pin.isdigit()):
         parser.error("--pin must be exactly 4 digits, e.g. --pin 1111")
+    if args.regenerate_pins and (args.reset or args.pin is not None or args.sequential_pins):
+        parser.error("--regenerate-pins can't be combined with --reset, --pin, or --sequential-pins.")
 
     if args.reset:
         Base.metadata.drop_all(bind=engine)
@@ -126,6 +156,15 @@ def main() -> None:
 
     db = SessionLocal()
     try:
+        if args.regenerate_pins:
+            lines = regenerate_pins(db)
+            report = "\n".join(lines)
+            PINS_FILE.write_text(report + "\n", encoding="utf-8")
+            print("Regenerated PINs for all classrooms (groups and projects untouched):\n")
+            print(report)
+            print(f"\nPINs also saved to {PINS_FILE} — keep that file private (it is gitignored).")
+            return
+
         lines = seed_classrooms(
             db,
             pin_mode="sequential" if args.sequential_pins else "random",

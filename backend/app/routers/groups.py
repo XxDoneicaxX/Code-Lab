@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,9 +13,13 @@ _DUPLICATE_NAME_DETAIL = "A group with that name already exists in this classroo
 
 
 @router.get("", response_model=GroupListOut)
-def list_groups(classroom_id: int = Depends(get_classroom_id), db: Session = Depends(get_db)):
+def list_groups(
+    kind: str = Query(default="capstone", pattern=r"^(capstone|in_class)$"),
+    classroom_id: int = Depends(get_classroom_id),
+    db: Session = Depends(get_db),
+):
     classroom = classroom_service.get_classroom(db, classroom_id)
-    groups = group_service.list_groups(db, classroom_id)
+    groups = group_service.list_groups(db, classroom_id, kind)
     return {"classroom": classroom, "groups": groups}
 
 
@@ -26,7 +30,7 @@ def create_group(
     db: Session = Depends(get_db),
 ):
     try:
-        return group_service.create_group(db, classroom_id, payload.name)
+        return group_service.create_group(db, classroom_id, payload.name, payload.kind)
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail=_DUPLICATE_NAME_DETAIL)

@@ -11,7 +11,7 @@ export default function PythonWorkspacePage() {
       <TopBar crumbs={["Python Workspace"]} backTo={{ label: "Home", to: "/" }} />
       <PythonEditor
         defaultValue={STARTER_CODE}
-        tip="This workspace is temporary and won't be saved. Use Classroom Projects to save your work and continue later."
+        tip="This workspace is temporary and won't be saved. To save your work, open your classroom's In-Class Work section instead."
       />
     </div>
   );

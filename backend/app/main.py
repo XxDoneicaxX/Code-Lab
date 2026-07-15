@@ -8,16 +8,25 @@ from fastapi.staticfiles import StaticFiles
 
 from . import models  # noqa: F401  (registers tables with Base.metadata)
 from .config import settings
-from .database import Base, SessionLocal, engine
-from .routers import classrooms, groups, projects
+from .database import Base, SessionLocal, engine, run_migrations
+from .routers import classrooms, files, groups
 from .seed import seed_classrooms
+from .services.file_service import backfill_project_files
 
 FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    run_migrations()
     Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
+    try:
+        backfill_project_files(db)  # migrates any pre-existing Project.code into main.py
+    finally:
+        db.close()
+
     if settings.auto_seed_on_boot:
         db = SessionLocal()
         try:
@@ -59,7 +68,7 @@ async def add_isolation_headers(request: Request, call_next):
 
 app.include_router(classrooms.router)
 app.include_router(groups.router)
-app.include_router(projects.router)
+app.include_router(files.router)
 
 
 @app.get("/api/health")

@@ -7,6 +7,7 @@ backend/*.db-shm
 backend/*.db-wal
 backend/.env
 backend/classroom_pins.txt
+backend/uploads/
 
 # Node
 frontend/node_modules/

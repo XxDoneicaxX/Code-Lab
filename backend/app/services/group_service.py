@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
 from .. import models
-from .project_service import DEFAULT_CODE
+from . import project_service
 
 
 class GroupNotFoundError(Exception):
@@ -21,22 +21,21 @@ def _get_owned_group(db: Session, group_id: int, classroom_id: int) -> models.Gr
     return group
 
 
-def list_groups(db: Session, classroom_id: int) -> list[models.Group]:
+def list_groups(db: Session, classroom_id: int, kind: str) -> list[models.Group]:
     return (
         db.query(models.Group)
-        .filter(models.Group.classroom_id == classroom_id)
+        .filter(models.Group.classroom_id == classroom_id, models.Group.kind == kind)
         .order_by(models.Group.created_at)
         .all()
     )
 
 
-def create_group(db: Session, classroom_id: int, name: str) -> models.Group:
+def create_group(db: Session, classroom_id: int, name: str, kind: str) -> models.Group:
     """Create a group and its one persistent (blank) project together."""
-    group = models.Group(classroom_id=classroom_id, name=name)
+    group = models.Group(classroom_id=classroom_id, name=name, kind=kind)
     db.add(group)
-    db.flush()  # assigns group.id for the project's foreign key
-    db.add(models.Project(group_id=group.id, code=DEFAULT_CODE))
-    db.commit()
+    db.flush()  # assigns group.id, needed by get_or_create_project below
+    project_service.get_or_create_project(db, group)
     db.refresh(group)
     return group
 

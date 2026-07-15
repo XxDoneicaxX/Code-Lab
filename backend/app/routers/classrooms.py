@@ -27,4 +27,4 @@ def verify_pin(classroom_id: int, payload: PinVerifyIn, db: Session = Depends(ge
         )
     except classroom_service.InvalidPinError:
         raise HTTPException(status_code=401, detail="Incorrect PIN. Try again.")
-    return {"token": token, "classroom": classroom}
+    return {"token": token}
