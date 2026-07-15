@@ -58,6 +58,36 @@ function loadPyodideScript() {
 let pyodide = null;
 let loadPromise = null;
 let currentRunStopRequested = false;
+let gameActive = false;
+
+// The first time pygame.init() runs, Emscripten/SDL2 registers its own
+// keydown/keyup/keypress listeners directly on `document` (confirmed via
+// instrumentation — not scoped to the canvas), and never removes them.
+// They also aren't re-registered on later runs (SDL_Init() is a no-op once
+// already initialized), so they can't simply be torn down after each run —
+// that would leave the *next* game with no keyboard input at all. Once
+// installed they sit there for the rest of the page's life, which is why
+// typing (and browser shortcuts like copy/paste, since a keydown listener
+// anywhere in the chain can cancel the browser's default action) stops
+// working everywhere after a game has run, until a full reload tears down
+// the whole JS runtime.
+//
+// Fix: register our own bubble-phase listener on `document` here, at
+// module load — guaranteed to run before pygame ever starts, so it's first
+// in document's listener list for these event types. When no game is
+// currently running, stopImmediatePropagation() stops SDL's listener from
+// ever firing (and therefore from cancelling the browser's default action),
+// without affecting the editor — whatever element has focus already
+// handled the event in the target phase, earlier in dispatch — and without
+// calling preventDefault() ourselves, so normal typing/copy/paste proceed.
+if (typeof document !== "undefined") {
+  const gateSdlKeyboardCapture = (event) => {
+    if (!gameActive) event.stopImmediatePropagation();
+  };
+  document.addEventListener("keydown", gateSdlKeyboardCapture);
+  document.addEventListener("keyup", gateSdlKeyboardCapture);
+  document.addEventListener("keypress", gateSdlKeyboardCapture);
+}
 
 async function ensureRuntime({ onStdout, onStderr }) {
   if (pyodide) return pyodide;
@@ -156,6 +186,7 @@ export async function runPygame(code, canvas, { onStdout, onStderr }, manifest) 
 
   currentRunStopRequested = false;
   py.globals.set("_stop_requested", false);
+  gameActive = true;
 
   let namespace = null;
   try {
@@ -167,6 +198,7 @@ export async function runPygame(code, canvas, { onStdout, onStderr }, manifest) 
     if (currentRunStopRequested) return { outcome: "stopped" };
     return { outcome: "error", message: friendlyTraceback(err.message) };
   } finally {
+    gameActive = false;
     if (namespace) namespace.destroy();
   }
 }
