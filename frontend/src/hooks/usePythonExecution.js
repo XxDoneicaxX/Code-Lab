@@ -30,9 +30,22 @@ export function usePythonExecution() {
   }, []);
 
   const run = useCallback(
-    async (code, manifest) => {
+    async (code, getManifest) => {
       if (workerRunner.status !== "ready" || pygameRunningRef.current) return;
       workerRunner.clear(); // each Run starts with a clean Output, like a normal IDE
+
+      let manifest;
+      if (getManifest) {
+        try {
+          manifest = await getManifest();
+        } catch (err) {
+          // A failure fetching sibling files/assets must surface, not just
+          // leave Run looking like it did nothing.
+          workerRunner.pushOutput("stderr", `Couldn't load project files: ${err.message}`);
+          return;
+        }
+      }
+
       const needsPygame = await workerRunner.detectPygame(code);
 
       if (!needsPygame) {

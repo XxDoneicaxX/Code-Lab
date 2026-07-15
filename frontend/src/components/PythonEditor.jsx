@@ -96,9 +96,8 @@ export default function PythonEditor({
     else onChange?.(codeRef.current);
   };
 
-  const handleRun = useCallback(async () => {
-    const manifest = await getProjectManifest?.();
-    runner.run(codeRef.current, manifest);
+  const handleRun = useCallback(() => {
+    runner.run(codeRef.current, getProjectManifest);
   }, [runner, getProjectManifest]);
 
   // Monaco commands capture their callback once at mount; route through refs

@@ -63,19 +63,21 @@ builtins.input = _input
 
 def _detect_pygame_import(source):
     """AST-based: only real import statements count, never mentions of
-    "pygame" inside comments, strings, or variable names."""
+    "pygame" inside comments, strings, or variable names. Never raises —
+    a Run must never hang waiting on this; worst case it just falls back
+    to the regular (non-pygame) execution path."""
     try:
         tree = ast.parse(source)
-    except SyntaxError:
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                if any(alias.name.split(".")[0] == "pygame" for alias in node.names):
+                    return True
+            elif isinstance(node, ast.ImportFrom):
+                if node.module and node.module.split(".")[0] == "pygame":
+                    return True
         return False
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            if any(alias.name.split(".")[0] == "pygame" for alias in node.names):
-                return True
-        elif isinstance(node, ast.ImportFrom):
-            if node.module and node.module.split(".")[0] == "pygame":
-                return True
-    return False
+    except Exception:
+        return False
 `;
 
 let pyodide = null;

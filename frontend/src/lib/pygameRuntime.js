@@ -91,6 +91,22 @@ function friendlyTraceback(message) {
   return ["Traceback (most recent call last):", ...lines.slice(start)].join("\n");
 }
 
+// Loading Pyodide/pygame-ce on the main thread can fail for reasons outside
+// the student's control — most commonly a school content filter or browser
+// extension blocking eval()/WASM, which Pyodide's startup needs. Whatever
+// the cause, this always surfaces as a clear message instead of the Run
+// button silently doing nothing (see the CSP-blocked-eval incident this
+// message is written for).
+function friendlyLoadError(err) {
+  const detail = err?.message || String(err);
+  return (
+    "Couldn't start the pygame runtime. This device's security settings " +
+    "(often a school content filter or browser extension) may be blocking " +
+    "it — try a different computer or browser profile.\n\n" +
+    `Technical detail: ${detail}`
+  );
+}
+
 // Writes a multi-file project's other files and uploaded assets into
 // Pyodide's virtual filesystem — mirrors materializeManifest() in
 // pyodide-worker.js (duplicated rather than shared: this runs on the main
@@ -130,8 +146,14 @@ function materializeManifest(py, manifest) {
  *   { outcome: "error", message }       — a real exception in student code
  */
 export async function runPygame(code, canvas, { onStdout, onStderr }, manifest) {
-  const py = await ensureRuntime({ onStdout, onStderr });
-  py.canvas.setCanvas2D(canvas);
+  let py;
+  try {
+    py = await ensureRuntime({ onStdout, onStderr });
+    py.canvas.setCanvas2D(canvas);
+  } catch (err) {
+    return { outcome: "error", message: friendlyLoadError(err) };
+  }
+
   currentRunStopRequested = false;
   py.globals.set("_stop_requested", false);
 
