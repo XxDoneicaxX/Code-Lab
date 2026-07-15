@@ -49,8 +49,54 @@ function blockingInput(prompt) {
 
 const BOOTSTRAP = `
 import ast
+import asyncio
 import builtins
 import json
+
+# Async code commonly schedules its entry point with
+# asyncio.ensure_future(main()) / asyncio.create_task(main()) — or, for
+# desktop-style code, \`if __name__ == "__main__": asyncio.run(main())\` — as
+# the last line of the module, rather than a top-level \`await\`.
+# runPythonAsync() only awaits the module body itself, so once that line
+# schedules the task the module is finished from Python's point of view and
+# runPythonAsync() resolves immediately — even though the scheduled code
+# hasn't run yet. Track whatever gets scheduled here so the caller can
+# explicitly await it after the module body finishes running.
+_pending_task = None
+_original_ensure_future = asyncio.ensure_future
+_original_create_task = asyncio.create_task
+
+def _tracking_ensure_future(coro_or_future, **kwargs):
+    global _pending_task
+    _pending_task = _original_ensure_future(coro_or_future, **kwargs)
+    return _pending_task
+
+def _tracking_create_task(coro, **kwargs):
+    global _pending_task
+    _pending_task = _original_create_task(coro, **kwargs)
+    return _pending_task
+
+asyncio.ensure_future = _tracking_ensure_future
+asyncio.create_task = _tracking_create_task
+
+# asyncio.run(main()) is completely standard outside a browser, but
+# runPythonAsync() already runs student code inside its own active event
+# loop, so the real asyncio.run() raises "cannot be called from a running
+# event loop" the instant it's reached — a confusing failure for a pattern
+# students didn't write wrong. Schedule it instead (tracked, as above) when
+# a loop is already running, so desktop-style code just works unmodified.
+_original_run = asyncio.run
+
+def _browser_safe_run(coro, *args, **kwargs):
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = None
+    if loop is not None and loop.is_running():
+        return asyncio.ensure_future(coro)
+    return _original_run(coro, *args, **kwargs)
+
+asyncio.run = _browser_safe_run
 
 def _input(prompt=""):
     try:
@@ -194,7 +240,29 @@ self.onmessage = async (event) => {
     // paths materializeManifest() writes files/assets at, so path math
     // relative to it (e.g. joining "assets") resolves the same either way.
     namespace.set("__file__", "main.py");
+    // Without this, __name__ defaults to "builtins" (Pyodide's exec fallback,
+    // not "__main__" like a real script run) — so the extremely common
+    // `if __name__ == "__main__": ...` entry-point idiom silently never
+    // executes. No error, no output — the script just finishes instantly.
+    namespace.set("__name__", "__main__");
     await pyodide.runPythonAsync(code, { globals: namespace });
+    // The module body finishing doesn't mean the program is done — code
+    // that schedules work via ensure_future/create_task/run (see BOOTSTRAP)
+    // only *starts* it here. Wait for that tracked task too, so "done"
+    // reflects when the program actually finishes, not just when the
+    // module's top-level statements ran. Awaited directly as a PyProxy
+    // rather than via a second runPythonAsync() call — Pyodide's single
+    // WebLoop rejects a nested eval_code_async() trying to await a task
+    // from an earlier one ("Task cannot await on itself").
+    const pendingTask = pyodide.globals.get("_pending_task");
+    if (pendingTask) {
+      try {
+        await pendingTask;
+      } finally {
+        pendingTask.destroy();
+        pyodide.runPython("_pending_task = None");
+      }
+    }
     postMessage({ type: "done" });
   } catch (err) {
     postMessage({ type: "error", text: friendlyTraceback(err.message) });
