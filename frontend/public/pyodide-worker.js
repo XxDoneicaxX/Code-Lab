@@ -187,6 +187,13 @@ self.onmessage = async (event) => {
   try {
     materializeManifest(manifest);
     namespace = pyodide.globals.get("dict")();
+    // runPythonAsync executes code like exec(), which never sets __file__ —
+    // real script runs do. Students commonly locate their assets folder via
+    // os.path.dirname(os.path.abspath(__file__)), so without this it's a
+    // NameError before anything else runs. "main.py" matches the relative
+    // paths materializeManifest() writes files/assets at, so path math
+    // relative to it (e.g. joining "assets") resolves the same either way.
+    namespace.set("__file__", "main.py");
     await pyodide.runPythonAsync(code, { globals: namespace });
     postMessage({ type: "done" });
   } catch (err) {
