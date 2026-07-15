@@ -79,6 +79,24 @@ export default function PythonEditor({
   const runner = usePythonExecution();
   const { theme } = useTheme();
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
+  const canvasPanelRef = useRef(null);
+  const [isCanvasFullscreen, setIsCanvasFullscreen] = useState(false);
+
+  // Tracks the real fullscreen state (rather than just what we asked for) so
+  // the button/label stay correct if the student exits via Esc or the
+  // browser's own UI instead of our button.
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsCanvasFullscreen(document.fullscreenElement === canvasPanelRef.current);
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  const toggleCanvasFullscreen = () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else canvasPanelRef.current?.requestFullscreen();
+  };
 
   // Monaco's `defaultValue` only applies at mount; switching files remounts
   // the editor (see `key` below), so resync the run/save buffer here rather
@@ -223,6 +241,14 @@ export default function PythonEditor({
                 {tab.label}
               </button>
             ))}
+            {runner.activeTab === "canvas" && (
+              <button
+                onClick={toggleCanvasFullscreen}
+                className="ml-auto rounded-md px-2.5 py-1 text-xs font-semibold text-ink/50 transition-colors hover:bg-app-bg hover:text-ink"
+              >
+                {isCanvasFullscreen ? "⤢ Exit fullscreen" : "⛶ Fullscreen"}
+              </button>
+            )}
           </div>
 
           {/* Both panes stay mounted; only CSS visibility toggles, so a
@@ -236,6 +262,7 @@ export default function PythonEditor({
             />
           </div>
           <div
+            ref={canvasPanelRef}
             className={`min-h-0 flex-1 flex-col items-center justify-center gap-2 bg-black p-3 ${
               runner.activeTab === "canvas" ? "flex" : "hidden"
             }`}
@@ -248,8 +275,12 @@ export default function PythonEditor({
               onKeyDown={(event) => {
                 if (ARROW_AND_SPACE_KEYS.has(event.key)) event.preventDefault();
               }}
-              className="max-h-full max-w-full rounded border border-white/10 outline-none focus:border-accent"
-              style={{ imageRendering: "pixelated" }}
+              className={
+                isCanvasFullscreen
+                  ? "h-full w-full rounded border border-white/10 outline-none focus:border-accent"
+                  : "max-h-full max-w-full rounded border border-white/10 outline-none focus:border-accent"
+              }
+              style={{ imageRendering: "pixelated", objectFit: "contain" }}
             />
             <p className="text-center text-xs text-white/50">
               {runner.pygameRunning
