@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     # subdirectory per group — not in the database, which only stores
     # each asset's metadata and generated filename.
     uploads_dir: str = str(BACKEND_DIR / "uploads")
-    max_asset_bytes: int = 5 * 1024 * 1024  # 5 MB per uploaded asset
+    max_asset_bytes: int = 10 * 1024 * 1024  # 10 MB per uploaded asset
 
     model_config = SettingsConfigDict(env_file=BACKEND_DIR / ".env")
 
