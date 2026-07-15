@@ -35,7 +35,7 @@ export function usePythonRunner() {
   const hasOutputRef = useRef(false);
   const inputBufferRef = useRef(null); // { signalView, dataView } | null
   const pendingInputRef = useRef(null);
-  const pendingDetectionsRef = useRef(new Map()); // requestId -> resolve, for detectPygame()
+  const pendingDetectionsRef = useRef(new Map()); // requestId -> resolve, for analyzePygame()
   const detectionIdRef = useRef(0);
   const [status, setStatus] = useState("loading");
   const [output, setOutput] = useState([]);
@@ -114,11 +114,11 @@ export function usePythonRunner() {
           );
           setStatusBoth("failed");
           break;
-        case "pygame_detected": {
+        case "pygame_analyzed": {
           const resolve = pendingDetectionsRef.current.get(msg.requestId);
           if (resolve) {
             pendingDetectionsRef.current.delete(msg.requestId);
-            resolve(msg.result);
+            resolve({ isPygame: msg.isPygame, missingYield: msg.missingYield });
           }
           break;
         }
@@ -138,16 +138,17 @@ export function usePythonRunner() {
   }, [startWorker]);
 
   // Asks the worker's already-loaded Python interpreter whether `code`
-  // contains a real `import pygame` (AST-based — see pyodide-worker.js).
-  const detectPygame = useCallback((code) => {
+  // imports pygame and, if so, whether it's missing the async yield point
+  // it needs to run in a browser (AST-based — see pyodide-worker.js).
+  const analyzePygame = useCallback((code) => {
     return new Promise((resolve) => {
       if (statusRef.current !== "ready" || !workerRef.current) {
-        resolve(false);
+        resolve({ isPygame: false, missingYield: false });
         return;
       }
       const requestId = ++detectionIdRef.current;
       pendingDetectionsRef.current.set(requestId, resolve);
-      workerRef.current.postMessage({ type: "detect_pygame", code, requestId });
+      workerRef.current.postMessage({ type: "analyze_pygame", code, requestId });
     });
   }, []);
 
@@ -197,7 +198,7 @@ export function usePythonRunner() {
     stop,
     clear,
     submitInput,
-    detectPygame,
+    analyzePygame,
     pushOutput: enqueue, // lets other execution modes (pygame) share this same Output feed
   };
 }

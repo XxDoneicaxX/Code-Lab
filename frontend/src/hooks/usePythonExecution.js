@@ -3,6 +3,28 @@ import { useCallback, useRef, useState } from "react";
 import { requestPygameStop, resetPygameCanvas, runPygame } from "../lib/pygameRuntime";
 import { usePythonRunner } from "./usePythonRunner";
 
+// Shown instead of running when pygame code has a loop but no async yield
+// point — that shape would freeze the tab rather than animate, since a
+// browser can only redraw or check for input at a spot the code explicitly
+// pauses at. Explains the fix rather than just naming the missing line, since
+// this is usually hit by students pasting a classic (non-browser) tutorial.
+const MISSING_YIELD_MESSAGE = `Your game has a loop but never pauses to let the browser catch up, so it would freeze instead of animating.
+
+Add this line at the end of your main loop (right after clock.tick(...)):
+
+    await asyncio.sleep(0)
+
+And make sure that loop is inside an async function you call with await:
+
+    async def main():
+        while running:
+            ...
+            await asyncio.sleep(0)
+
+    await main()
+
+A normal desktop pygame window updates on its own; a browser tab can only redraw or check for key presses/clicks at a moment your code pauses at — that's what await asyncio.sleep(0) does here.`;
+
 /**
  * Unified Python execution: routes each Run between the existing Worker
  * (safe for ordinary code — hard-killable, supports genuine blocking
@@ -46,14 +68,23 @@ export function usePythonExecution() {
         }
       }
 
-      const needsPygame = await workerRunner.detectPygame(code);
+      const { isPygame, missingYield } = await workerRunner.analyzePygame(code);
 
-      if (!needsPygame) {
+      if (!isPygame) {
         stopPreviousGame();
         pygameRunningRef.current = false;
         setPygameRunning(false);
         setActiveTab("output"); // rule 12: plain code after a game returns to Output
         workerRunner.run(code, manifest);
+        return;
+      }
+
+      if (missingYield) {
+        stopPreviousGame();
+        pygameRunningRef.current = false;
+        setPygameRunning(false);
+        setActiveTab("output");
+        workerRunner.pushOutput("stderr", MISSING_YIELD_MESSAGE);
         return;
       }
 

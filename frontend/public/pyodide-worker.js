@@ -50,6 +50,7 @@ function blockingInput(prompt) {
 const BOOTSTRAP = `
 import ast
 import builtins
+import json
 
 def _input(prompt=""):
     try:
@@ -61,23 +62,46 @@ def _input(prompt=""):
 
 builtins.input = _input
 
-def _detect_pygame_import(source):
-    """AST-based: only real import statements count, never mentions of
-    "pygame" inside comments, strings, or variable names. Never raises —
-    a Run must never hang waiting on this; worst case it just falls back
-    to the regular (non-pygame) execution path."""
+def _analyze_pygame_code(source):
+    """AST-based (only real import statements count, never mentions of
+    "pygame" inside comments/strings/names). Returns a JSON string —
+    sidesteps PyProxy conversion for the dict, and is simple to parse on
+    the JS side. Never raises: a Run must never hang waiting on this;
+    worst case it just falls back to the regular execution path.
+
+    is_pygame: the code imports pygame at all.
+    missing_yield: it also has a while-loop (the shape that would spin
+    forever) with no \`await ...sleep(...)\` anywhere — a one-shot pygame
+    script with no loop needs no yield point and is never flagged.
+    """
     try:
         tree = ast.parse(source)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                if any(alias.name.split(".")[0] == "pygame" for alias in node.names):
-                    return True
-            elif isinstance(node, ast.ImportFrom):
-                if node.module and node.module.split(".")[0] == "pygame":
-                    return True
-        return False
     except Exception:
-        return False
+        return json.dumps({"is_pygame": False, "missing_yield": False})
+
+    is_pygame = False
+    has_while_loop = False
+    has_yield = False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            if any(alias.name.split(".")[0] == "pygame" for alias in node.names):
+                is_pygame = True
+        elif isinstance(node, ast.ImportFrom):
+            if node.module and node.module.split(".")[0] == "pygame":
+                is_pygame = True
+        elif isinstance(node, ast.While):
+            has_while_loop = True
+        elif isinstance(node, ast.Await):
+            call = node.value
+            if (
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "sleep"
+            ):
+                has_yield = True
+
+    missing_yield = is_pygame and has_while_loop and not has_yield
+    return json.dumps({"is_pygame": is_pygame, "missing_yield": missing_yield})
 `;
 
 let pyodide = null;
@@ -140,10 +164,17 @@ function materializeManifest(manifest) {
 self.onmessage = async (event) => {
   const { type, code, requestId, manifest } = event.data;
 
-  if (type === "detect_pygame") {
+  if (type === "analyze_pygame") {
     await ready;
-    const result = pyodide ? pyodide.globals.get("_detect_pygame_import")(code) : false;
-    postMessage({ type: "pygame_detected", requestId, result });
+    const analysis = pyodide
+      ? JSON.parse(pyodide.globals.get("_analyze_pygame_code")(code))
+      : { is_pygame: false, missing_yield: false };
+    postMessage({
+      type: "pygame_analyzed",
+      requestId,
+      isPygame: analysis.is_pygame,
+      missingYield: analysis.missing_yield,
+    });
     return;
   }
 
