@@ -216,6 +216,7 @@ export default function FileExplorer({
   onUploadAsset,
   onMove,
   onFetchAssetBytes,
+  onDownloadAll,
 }) {
   const [collapsedIds, setCollapsedIds] = useState(() => new Set());
   const [selectedId, setSelectedId] = useState(null);
@@ -225,6 +226,7 @@ export default function FileExplorer({
   const [moving, setMoving] = useState(null); // file | null
   const [previewing, setPreviewing] = useState(null); // file | null
   const [downloading, setDownloading] = useState(false);
+  const [downloadingAll, setDownloadingAll] = useState(false);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState(null);
   const fileInputRef = useRef(null);
@@ -310,6 +312,23 @@ export default function FileExplorer({
       setFormError(err.message);
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const handleDownloadAll = async () => {
+    setDownloadingAll(true);
+    try {
+      const { blob, filename } = await onDownloadAll();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setDownloadingAll(false);
     }
   };
 
@@ -412,6 +431,14 @@ export default function FileExplorer({
           onClick={() => selectedNode && setDeleting(selectedNode)}
         >
           Delete
+        </Button>
+        <Button
+          variant="neutral"
+          className="!ml-auto !px-2 !py-1 text-xs"
+          disabled={downloadingAll}
+          onClick={handleDownloadAll}
+        >
+          {downloadingAll ? "Zipping…" : "Download All"}
         </Button>
       </div>
 

@@ -138,3 +138,14 @@ export async function getAssetBytes(classroomId, groupId, fileId) {
   if (!response.ok) throw new ApiError(`Couldn't load asset (${response.status}).`, response.status);
   return response.arrayBuffer();
 }
+
+export async function downloadAllFiles(classroomId, groupId) {
+  const headers = {};
+  const token = getToken(classroomId);
+  if (token) headers["X-Classroom-Token"] = token;
+  const response = await fetch(`/api/groups/${groupId}/files/download-all`, { headers });
+  if (!response.ok) throw new ApiError(`Couldn't download project (${response.status}).`, response.status);
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? "project.zip";
+  return { blob: await response.blob(), filename };
+}

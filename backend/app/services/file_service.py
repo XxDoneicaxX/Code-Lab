@@ -1,5 +1,7 @@
+import io
 import re
 import uuid
+import zipfile
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -245,6 +247,31 @@ def save_asset(
 
 def get_asset_path(node: models.ProjectFile) -> Path:
     return _uploads_dir_for(node.project_id) / node.disk_filename
+
+
+def build_project_zip(project: models.Project, files: list[models.ProjectFile]) -> bytes:
+    """Zips every text file and uploaded asset in the project at its real
+    folder path, for a one-shot local backup/submission download. `files`
+    is the flat list from list_tree() (root excluded, same as the tree the
+    frontend already reconstructs from parent_id)."""
+    by_id = {f.id: f for f in files}
+
+    def path_for(node: models.ProjectFile) -> str:
+        parts = []
+        current: models.ProjectFile | None = node
+        while current is not None:
+            parts.append(current.name)
+            current = by_id.get(current.parent_id) if current.parent_id is not None else None
+        return "/".join(reversed(parts))
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for node in files:
+            if node.is_directory:
+                continue
+            data = get_asset_path(node).read_bytes() if node.is_asset else (node.content or "").encode("utf-8")
+            zf.writestr(path_for(node), data)
+    return buffer.getvalue()
 
 
 def backfill_project_files(db: Session) -> None:

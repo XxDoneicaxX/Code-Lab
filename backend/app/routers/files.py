@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.exc import IntegrityError
@@ -58,6 +60,22 @@ def list_files(
     root = file_service.get_or_create_root(db, project)
     files = file_service.list_tree(db, project)
     return {"classroom": group.classroom, "group": group, "root_id": root.id, "files": files}
+
+
+@router.get("/{group_id}/files/download-all")
+def download_all_files(
+    group_id: int, classroom_id: int = Depends(get_classroom_id), db: Session = Depends(get_db)
+):
+    group = _authorized_group(db, group_id, classroom_id)
+    project = project_service.get_or_create_project(db, group)
+    files = file_service.list_tree(db, project)
+    zip_bytes = file_service.build_project_zip(project, files)
+    safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", group.name).strip("_") or "project"
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}.zip"'},
+    )
 
 
 @router.get("/{group_id}/files/{file_id}", response_model=FileContentOut)
